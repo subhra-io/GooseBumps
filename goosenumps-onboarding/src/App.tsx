@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Sidebar from './components/Sidebar'
 import Topbar from './components/Topbar'
 import SplashScreen from './components/SplashScreen'
@@ -8,12 +8,56 @@ import DocumentUploadStep from './steps/DocumentUploadStep'
 import BankingStep from './steps/BankingStep'
 import ReviewStep from './steps/ReviewStep'
 import SubmissionStep from './steps/SubmissionStep'
+import OTPScreen from './auth/OTPScreen'
+import SetPasswordScreen from './auth/SetPasswordScreen'
+import AdminLoginScreen from './auth/AdminLoginScreen'
+import MerchantDashboard from './dashboard/MerchantDashboard'
+import AdminDashboard from './dashboard/AdminDashboard'
+import { useOnboarding } from './context/OnboardingContext'
+
+type AppScreen =
+  | 'splash' | 'welcome' | 'onboarding' | 'otp' | 'submission'
+  | 'set-password' | 'merchant-dashboard' | 'admin-login' | 'admin-dashboard'
 
 export default function App() {
-  const [showSplash, setShowSplash]         = useState(true)
-  const [currentStep, setCurrentStep]       = useState(0)
+  const { data } = useOnboarding()
+  const [screen, setScreen]           = useState<AppScreen>('splash')
+  const [currentStep, setCurrentStep] = useState(1)
   const [completedSteps, setCompletedSteps] = useState<number[]>([])
-  const [savedDraft, setSavedDraft]         = useState(false)
+  const [savedDraft, setSavedDraft]   = useState(false)
+
+  // Check for password-setup token in URL
+  const [pwdToken, setPwdToken] = useState('')
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const token = params.get('token')
+    const path  = window.location.pathname
+
+    // /admin → admin login page
+    if (path === '/admin' || path === '/admin/') {
+      const stored = localStorage.getItem('gns_token')
+      const role   = localStorage.getItem('gns_role')
+      if (stored && role === 'admin') {
+        setScreen('admin-dashboard')
+      } else {
+        setScreen('admin-login')
+      }
+      return
+    }
+
+    if (token && path.includes('set-password')) {
+      setPwdToken(token)
+      setScreen('set-password')
+      return
+    }
+
+    // Check existing session
+    const stored = localStorage.getItem('gns_token')
+    const role   = localStorage.getItem('gns_role')
+    if (stored) {
+      setScreen(role === 'admin' ? 'admin-dashboard' : 'merchant-dashboard')
+    }
+  }, [])
 
   const markComplete = (step: number) =>
     setCompletedSteps(prev => prev.includes(step) ? prev : [...prev, step])
@@ -33,13 +77,58 @@ export default function App() {
     setTimeout(() => setSavedDraft(false), 2500)
   }
 
+  const handleLogout = () => {
+    localStorage.removeItem('gns_token')
+    localStorage.removeItem('gns_role')
+    // If on admin path, go back to admin login; else welcome
+    const isAdmin = window.location.pathname.startsWith('/admin')
+    setScreen(isAdmin ? 'admin-login' : 'welcome')
+  }
+
   // ── Splash ──────────────────────────────────────────────
-  if (showSplash) {
-    return <SplashScreen onComplete={() => { setShowSplash(false); setCurrentStep(0) }} />
+  if (screen === 'splash') {
+    return <SplashScreen onComplete={() => setScreen('welcome')} />
+  }
+
+  // ── Set Password (from email link) ──────────────────────
+  if (screen === 'set-password') {
+    return (
+      <SetPasswordScreen
+        token={pwdToken}
+        email={data.business.email || 'merchant@example.com'}
+        onComplete={() => setScreen('merchant-dashboard')}
+      />
+    )
+  }
+
+  // ── OTP verification ────────────────────────────────────
+  if (screen === 'otp') {
+    return (
+      <OTPScreen
+        email={data.business.email}
+        name={data.business.businessName}
+        onVerified={() => setScreen('submission')}
+      />
+    )
+  }
+
+  // ── Merchant Dashboard ──────────────────────────────────
+  if (screen === 'merchant-dashboard') {
+    return <MerchantDashboard onLogout={handleLogout} />
+  }
+
+  // ── Admin Login ─────────────────────────────────────────
+  if (screen === 'admin-login') {
+    return <AdminLoginScreen onSuccess={() => setScreen('admin-dashboard')} />
+  }
+
+  // ── Admin Dashboard ─────────────────────────────────────
+  if (screen === 'admin-dashboard') {
+    return <AdminDashboard onLogout={handleLogout} />
   }
 
   // ── Welcome (no sidebar) ────────────────────────────────
-  if (currentStep === 0) {
+  if (screen === 'welcome') {
     return (
       <div className="min-h-screen bg-[#f8f9ff]">
         <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-10">
@@ -48,34 +137,28 @@ export default function App() {
             <span className="font-bold text-lg tracking-tight text-[#0b1c30]">Goosenumps</span>
           </div>
           <div className="flex items-center gap-3">
-            <button className="text-sm text-slate-500 hover:text-slate-800 transition-colors">Help Center</button>
-            <button className="relative text-slate-500 hover:text-slate-800 transition-colors">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-              </svg>
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-[#f97316] rounded-full" />
-            </button>
-            <button onClick={handleSaveDraft} className="px-4 py-2 text-sm font-semibold border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors">
+            <button className="text-sm text-slate-500 hover:text-slate-800">Help Center</button>
+            <button onClick={handleSaveDraft} className="px-4 py-2 text-sm font-semibold border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50">
               Save Draft
             </button>
           </div>
         </header>
         <main className="max-w-5xl mx-auto px-8 py-8">
-          <WelcomeStep onStart={() => goToStep(1)} />
+          <WelcomeStep onStart={() => { setScreen('onboarding'); goToStep(1) }} />
         </main>
       </div>
     )
   }
 
-  // ── Submission success (no sidebar needed, but keep shell) ──
-  if (currentStep === 5) {
+  // ── Submission success ──────────────────────────────────
+  if (screen === 'submission') {
     return (
       <div className="min-h-screen bg-[#f8f9ff] flex">
         <Sidebar currentStep={4} completedSteps={[1,2,3,4]} onStepClick={() => {}} />
         <div className="flex-1 ml-[280px]">
           <Topbar onSaveDraft={handleSaveDraft} currentStep={5} />
           <main className="pt-14 px-8 py-8 max-w-5xl mx-auto">
-            <SubmissionStep onGoToDashboard={() => goToStep(0)} />
+            <SubmissionStep onGoToDashboard={() => setScreen('welcome')} />
           </main>
         </div>
       </div>
@@ -85,11 +168,7 @@ export default function App() {
   // ── Onboarding steps 1–4 ────────────────────────────────
   return (
     <div className="min-h-screen bg-[#f8f9ff] flex">
-      <Sidebar
-        currentStep={currentStep}
-        completedSteps={completedSteps}
-        onStepClick={goToStep}
-      />
+      <Sidebar currentStep={currentStep} completedSteps={completedSteps} onStepClick={goToStep} />
       <div className="flex-1 ml-[280px]">
         <Topbar onSaveDraft={handleSaveDraft} currentStep={currentStep} />
 
@@ -104,7 +183,7 @@ export default function App() {
 
         <main className="pt-14 px-8 py-8 max-w-5xl mx-auto">
           {currentStep === 1 && (
-            <BusinessProfileStep onNext={() => handleNext(1)} onBack={() => goToStep(0)} />
+            <BusinessProfileStep onNext={() => handleNext(1)} onBack={() => setScreen('welcome')} />
           )}
           {currentStep === 2 && (
             <DocumentUploadStep onNext={() => handleNext(2)} onBack={() => goToStep(1)} />
@@ -114,7 +193,10 @@ export default function App() {
           )}
           {currentStep === 4 && (
             <ReviewStep
-              onSubmit={() => { markComplete(4); goToStep(5) }}
+              onSubmit={async () => {
+                markComplete(4)
+                setScreen('otp')
+              }}
               onBack={() => goToStep(3)}
               onEditStep={goToStep}
             />

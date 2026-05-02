@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useOnboarding } from '../context/OnboardingContext'
+import { api } from '../lib/api'
 
 interface ReviewStepProps {
   onSubmit: () => void
@@ -16,9 +17,10 @@ export default function ReviewStep({ onSubmit, onBack, onEditStep }: ReviewStepP
   const { data } = useOnboarding()
   const { business: b, banking: bk, documents: docs } = data
 
-  const [agreed,    setAgreed]    = useState(false)
-  const [agreeErr,  setAgreeErr]  = useState(false)
+  const [agreed,     setAgreed]     = useState(false)
+  const [agreeErr,   setAgreeErr]   = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [apiError,   setApiError]   = useState('')
 
   const docList = [
     { label: 'Business License',    file: docs.businessLicense },
@@ -27,10 +29,50 @@ export default function ReviewStep({ onSubmit, onBack, onEditStep }: ReviewStepP
     { label: "Owner's ID (Back)",   file: docs.ownerIdBack },
   ].filter(d => d.file)
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!agreed) { setAgreeErr(true); return }
     setSubmitting(true)
-    setTimeout(() => onSubmit(), 1800)
+    setApiError('')
+    try {
+      // 1. Submit onboarding data
+      const res = await api.onboard({
+        business_name:  b.businessName,
+        legal_name:     b.legalName,
+        category:       b.category,
+        email:          b.email,
+        phone:          b.phone,
+        address:        b.address,
+        city:           b.city,
+        zip:            b.zip,
+        lat:            b.lat,
+        lng:            b.lng,
+        map_address:    b.mapAddress,
+        bank_name:      bk.bankName,
+        account_holder: bk.accountHolder,
+        account_number: bk.accountNumber,
+        routing_code:   bk.routingCode,
+        currency:       bk.currency,
+      }) as { merchant_id: string }
+
+      // 2. Upload documents if real File objects are stored
+      const uploads = [
+        { type: 'business_license', file: (docs as any)._businessLicenseFile as File | undefined },
+        { type: 'tax_id',           file: (docs as any)._taxIdFile           as File | undefined },
+        { type: 'owner_id_front',   file: (docs as any)._ownerIdFrontFile    as File | undefined },
+        { type: 'owner_id_back',    file: (docs as any)._ownerIdBackFile     as File | undefined },
+      ]
+      for (const u of uploads) {
+        if (u.file) await api.uploadDocument(res.merchant_id, u.type, u.file)
+      }
+
+      // 3. Trigger OTP to registered email
+      await api.sendOTP(b.email, b.businessName)
+
+      onSubmit()
+    } catch (err: any) {
+      setApiError(err.message || 'Submission failed. Please try again.')
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -277,6 +319,16 @@ export default function ReviewStep({ onSubmit, onBack, onEditStep }: ReviewStepP
         <p className="text-[11px] text-slate-400 text-center">
           Review times typically take 2–3 business days. You will receive an email notification once your application has been processed.
         </p>
+
+        {/* API error */}
+        {apiError && (
+          <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <p className="text-xs text-red-700 font-medium">{apiError}</p>
+          </div>
+        )}
       </div>
 
       {/* Footer */}

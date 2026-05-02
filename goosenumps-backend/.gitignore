@@ -1,0 +1,17 @@
+# Secrets — never commit
+.env
+.env.production
+.env.*.local
+
+# Build output
+server
+*.exe
+
+# Uploads (local dev files)
+uploads/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store

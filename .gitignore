@@ -1,1 +1,12 @@
 /.vscode
+.DS_Store
+
+# Backend secrets — never commit
+goosenumps-backend/.env
+goosenumps-backend/.env.production
+goosenumps-backend/uploads/
+
+# Frontend secrets
+goosenumps-onboarding/.env
+goosenumps-onboarding/.env.local
+goosenumps-onboarding/.env.production
