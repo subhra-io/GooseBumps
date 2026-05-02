@@ -3,9 +3,9 @@
 .env.production
 .env.*.local
 
-# Build output
-server
-*.exe
+# Build output — binary only (not the cmd/server/ source folder)
+/server
+server.exe
 
 # Uploads (local dev files)
 uploads/
