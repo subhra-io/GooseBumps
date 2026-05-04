@@ -2,5 +2,8 @@
   "buildCommand": "cd goosenumps-onboarding && npm install && npm run build",
   "outputDirectory": "goosenumps-onboarding/dist",
   "installCommand": "cd goosenumps-onboarding && npm install",
-  "framework": "vite"
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }
