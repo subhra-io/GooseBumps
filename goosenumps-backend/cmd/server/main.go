@@ -48,6 +48,51 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "time": time.Now()})
 	})
 
+	// ── /reset-admin — secured by ADMIN_RESET_SECRET env var ──────
+	// Usage: POST /reset-admin {"secret":"YOUR_SECRET","password":"NewPass123!"}
+	var dbRef *gorm.DB // will be set after DB connects below
+	r.POST("/reset-admin", func(c *gin.Context) {
+		secret := os.Getenv("ADMIN_RESET_SECRET")
+		if secret == "" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "ADMIN_RESET_SECRET not set"})
+			return
+		}
+		var body struct {
+			Secret   string `json:"secret"`
+			Password string `json:"password"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil || body.Secret != secret {
+			c.JSON(http.StatusForbidden, gin.H{"error": "invalid secret"})
+			return
+		}
+		if dbRef == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "db not ready yet, retry in a few seconds"})
+			return
+		}
+		hash, _ := bcrypt.GenerateFromPassword([]byte(body.Password), bcrypt.DefaultCost)
+		result := dbRef.Model(&models.User{}).
+			Where("email = ?", config.C.AdminEmail).
+			Updates(map[string]interface{}{
+				"password_hash": string(hash),
+				"is_active":     true,
+				"is_verified":   true,
+			})
+		if result.RowsAffected == 0 {
+			a := models.User{
+				Email:        config.C.AdminEmail,
+				PasswordHash: string(hash),
+				Role:         models.RoleAdmin,
+				IsVerified:   true,
+				IsActive:     true,
+			}
+			dbRef.Create(&a)
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"message": "admin password updated",
+			"email":   config.C.AdminEmail,
+		})
+	})
+
 	// Static uploads
 	r.Static("/uploads", config.C.StorageLocalPath)
 
@@ -81,6 +126,7 @@ func main() {
 		var err error
 		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: gormLogger})
 		if err == nil {
+			dbRef = db // make available to reset-admin handler
 			log.Println("✅ Database connected")
 			break
 		}
