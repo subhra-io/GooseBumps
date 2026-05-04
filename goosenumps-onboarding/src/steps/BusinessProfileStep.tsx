@@ -134,7 +134,7 @@ export default function BusinessProfileStep({ onNext }: Props) {
                 <input type="text" value={form.address} onChange={e => set('address', e.target.value)} placeholder="123 Culinary Way, Suite 400" className={inp('address')} />
                 {errors.address && <p className="text-red-500 text-xs mt-1">{errors.address}</p>}
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1.5">City <span className="text-red-500">*</span></label>
                   <input type="text" value={form.city} onChange={e => set('city', e.target.value)} placeholder="Brajrajnagar" className={inp('city')} />

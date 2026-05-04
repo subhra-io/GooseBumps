@@ -60,7 +60,8 @@ export default function MerchantMenu() {
           </div>
 
           {/* Table header */}
-          <div className="grid grid-cols-[2fr_1fr_1fr_1fr] px-5 py-2.5 bg-slate-50 border-b border-slate-100">
+          {/* Table header — hidden on mobile, shown on md+ */}
+          <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_1fr] px-5 py-2.5 bg-slate-50 border-b border-slate-100">
             {['Item Details', 'Special', 'Availability', 'Loyalty Tier'].map(h => (
               <p key={h} className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{h}</p>
             ))}
@@ -69,7 +70,7 @@ export default function MerchantMenu() {
           {/* Rows */}
           <div className="divide-y divide-slate-100">
             {filtered.map(item => (
-              <div key={item.id} className="grid grid-cols-[2fr_1fr_1fr_1fr] px-5 py-4 items-center hover:bg-slate-50 transition-colors">
+              <div key={item.id} className="flex flex-col md:grid md:grid-cols-[2fr_1fr_1fr_1fr] px-5 py-4 gap-3 md:gap-0 md:items-center hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0">
                 {/* Item */}
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center text-xl flex-shrink-0">

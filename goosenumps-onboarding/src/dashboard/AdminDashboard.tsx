@@ -129,7 +129,7 @@ export default function AdminDashboard({ onLogout }: { onLogout: () => void }) {
   return (
     <div className="min-h-screen bg-[#f8f9ff] flex">
       {/* Sidebar */}
-      <aside className="w-[220px] min-h-screen bg-[#0F172A] flex flex-col fixed left-0 top-0 bottom-0 z-10">
+      <aside className="hidden lg:flex w-[220px] min-h-screen bg-[#0F172A] flex-col fixed left-0 top-0 bottom-0 z-10">
         <div className="px-5 py-5 border-b border-white/10">
           <p className="text-[#f97316] font-bold text-lg">Goosenumps</p>
           <p className="text-slate-500 text-[10px]">Admin Portal</p>

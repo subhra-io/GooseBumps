@@ -141,7 +141,7 @@ export default function BankingStep({ onNext, onBack }: BankingStepProps) {
             </div>
 
             {/* Swift / Routing + Currency */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1.5">Swift / Routing Code</label>
                 <input

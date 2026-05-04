@@ -97,7 +97,7 @@ export default function MerchantOrders() {
                   </div>
 
                   {/* Order info */}
-                  <div className="flex-1 min-w-0 grid grid-cols-3 gap-4">
+                  <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4">
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Order ID</p>
                       <p className="text-sm font-bold text-[#0b1c30]">{order.id}</p>

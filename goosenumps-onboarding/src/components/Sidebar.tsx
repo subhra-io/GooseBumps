@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 const steps = [
   {
     id: 1,
@@ -48,27 +50,32 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ currentStep, completedSteps, onStepClick }: SidebarProps) {
-  // progress bar: step 1 = 25%, step 2 = 50%, step 3 = 75%, step 4 = 100%
+  const [mobileOpen, setMobileOpen] = useState(false)
   const progressPercent = currentStep === 0 ? 0 : (currentStep / steps.length) * 100
 
-  return (
-    <aside className="w-[280px] min-h-screen bg-[#0F172A] flex flex-col text-white fixed left-0 top-0 bottom-0 z-10">
+  const SidebarContent = () => (
+    <>
       {/* Logo */}
-      <div className="px-6 py-5 border-b border-white/10">
+      <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-[#f97316] rounded-lg flex items-center justify-center font-bold text-white text-sm shadow">
-            G
-          </div>
-          <span className="font-bold text-lg tracking-tight">Goosenumps</span>
+          <div className="w-8 h-8 bg-[#f97316] rounded-lg flex items-center justify-center font-bold text-white text-sm shadow">G</div>
+          <span className="font-bold text-base tracking-tight text-white">Goosenumps</span>
         </div>
+        {/* Close button — mobile only */}
+        <button
+          onClick={() => setMobileOpen(false)}
+          className="lg:hidden text-slate-400 hover:text-white p-1"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
       </div>
 
-      {/* Progress header */}
-      <div className="px-6 py-4 border-b border-white/10">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-[#f97316] mb-0.5">
-          Onboarding Progress
-        </p>
-        <p className="text-lg font-bold text-white mb-3">
+      {/* Progress */}
+      <div className="px-5 py-4 border-b border-white/10">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-[#f97316] mb-0.5">Onboarding Progress</p>
+        <p className="text-base font-bold text-white mb-2.5">
           Step {currentStep === 0 ? 1 : currentStep} of 4
         </p>
         <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
@@ -80,7 +87,7 @@ export default function Sidebar({ currentStep, completedSteps, onStepClick }: Si
       </div>
 
       {/* Steps */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5">
+      <nav className="flex-1 px-3 py-3 space-y-0.5">
         {steps.map((step) => {
           const isActive    = currentStep === step.id
           const isCompleted = completedSteps.includes(step.id)
@@ -89,22 +96,19 @@ export default function Sidebar({ currentStep, completedSteps, onStepClick }: Si
           return (
             <button
               key={step.id}
-              onClick={() => !isLocked && onStepClick(step.id)}
+              onClick={() => { if (!isLocked) { onStepClick(step.id); setMobileOpen(false) } }}
               disabled={isLocked}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 text-left
-                ${isActive
-                  ? 'bg-white/10 text-white border-l-2 border-[#f97316]'
-                  : isCompleted
-                    ? 'text-slate-300 hover:bg-white/8 cursor-pointer'
-                    : 'text-slate-500 cursor-not-allowed'
-                }
+                ${isActive ? 'bg-white/10 text-white border-l-2 border-[#f97316]' : ''}
+                ${isCompleted && !isActive ? 'text-slate-300 hover:bg-white/8 cursor-pointer' : ''}
+                ${isLocked ? 'text-slate-600 cursor-not-allowed' : ''}
+                ${!isActive && !isCompleted && !isLocked ? 'text-slate-400 hover:bg-white/8 cursor-pointer' : ''}
               `}
             >
-              {/* Icon */}
               <span className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center
-                ${isActive    ? 'bg-[#f97316] text-white' : ''}
+                ${isActive ? 'bg-[#f97316] text-white' : ''}
                 ${isCompleted && !isActive ? 'bg-green-500/20 text-green-400' : ''}
-                ${isLocked    ? 'bg-white/5 text-slate-600' : ''}
+                ${isLocked ? 'bg-white/5 text-slate-600' : ''}
                 ${!isActive && !isCompleted && !isLocked ? 'bg-white/8 text-slate-400' : ''}
               `}>
                 {isCompleted && !isActive
@@ -112,7 +116,7 @@ export default function Sidebar({ currentStep, completedSteps, onStepClick }: Si
                   : step.icon
                 }
               </span>
-              <span>{step.label}</span>
+              <span className="truncate">{step.label}</span>
             </button>
           )
         })}
@@ -127,6 +131,43 @@ export default function Sidebar({ currentStep, completedSteps, onStepClick }: Si
           Need Assistance?
         </button>
       </div>
-    </aside>
+    </>
+  )
+
+  return (
+    <>
+      {/* ── Desktop sidebar (fixed, always visible ≥ lg) ── */}
+      <aside className="hidden lg:flex w-[280px] min-h-screen bg-[#0F172A] flex-col fixed left-0 top-0 bottom-0 z-20">
+        <SidebarContent />
+      </aside>
+
+      {/* ── Mobile: hamburger button ── */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="lg:hidden fixed top-3.5 left-4 z-30 w-9 h-9 bg-[#0F172A] rounded-lg flex items-center justify-center text-white shadow-lg"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+        </svg>
+      </button>
+
+      {/* ── Mobile: backdrop ── */}
+      {mobileOpen && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black/50 z-20 backdrop-blur-sm"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* ── Mobile: slide-in drawer ── */}
+      <aside
+        className={`lg:hidden fixed top-0 left-0 bottom-0 w-[280px] bg-[#0F172A] flex flex-col z-30
+          transition-transform duration-300 ease-in-out
+          ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
+        `}
+      >
+        <SidebarContent />
+      </aside>
+    </>
   )
 }

@@ -86,20 +86,20 @@ export default function WelcomeStep({ onStart }: WelcomeStepProps) {
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex flex-col lg:flex-row">
           {/* Left content */}
-          <div className="flex-1 p-8">
-            <span className="inline-block text-xs font-semibold tracking-widest uppercase text-[#9d4300] bg-orange-50 border border-orange-200 px-3 py-1 rounded-full mb-4">
+          <div className="flex-1 p-5 sm:p-8">
+            <span className="inline-block text-xs font-semibold tracking-widest uppercase text-[#9d4300] bg-orange-50 border border-orange-200 px-3 py-1 rounded-full mb-3 sm:mb-4">
               Partner Portal
             </span>
-            <h1 className="text-3xl font-bold text-[#0b1c30] leading-tight mb-3">
+            <h1 className="text-2xl sm:text-3xl font-bold text-[#0b1c30] leading-tight mb-2 sm:mb-3">
               Welcome to Goosenumps
             </h1>
-            <p className="text-slate-500 text-base leading-relaxed mb-6 max-w-md">
+            <p className="text-slate-500 text-sm sm:text-base leading-relaxed mb-5 sm:mb-6 max-w-md">
               Join our premier network of merchants and logistics specialists. We've streamlined the registration process to get your business live and taking orders in record time.
             </p>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-col xs:flex-row flex-wrap gap-3">
               <button
                 onClick={onStart}
-                className="flex items-center gap-2 px-6 py-2.5 bg-[#f97316] hover:bg-[#ea6c0a] text-white font-semibold rounded-lg transition-colors shadow-sm"
+                className="flex items-center justify-center gap-2 px-6 py-2.5 bg-[#f97316] hover:bg-[#ea6c0a] text-white font-semibold rounded-lg transition-colors shadow-sm"
               >
                 Start Registration
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
