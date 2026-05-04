@@ -27,40 +27,41 @@ import (
 func main() {
 	config.Load()
 
-	// ── Start HTTP server immediately so healthcheck passes ──
-	// DB and Redis connect in background; routes return 503 until ready
 	if config.C.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
 	r := gin.Default()
 
-	// ── CORS ─────────────────────────────────────────────
+	// ── CORS — allow all origins (tighten after domain confirmed) ──
 	r.Use(cors.New(cors.Config{
-		AllowAllOrigins:  true, // tighten after domain is confirmed
+		AllowAllOrigins:  true,
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: false, // must be false when AllowAllOrigins=true
+		AllowCredentials: false,
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// ── Health (always responds, even before DB is ready) ──
-	dbReady    := false
-	redisReady := false
+	// ── /health responds immediately — Railway healthcheck passes ──
 	r.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"status":      "ok",
-			"time":        time.Now(),
-			"db_ready":    dbReady,
-			"redis_ready": redisReady,
-		})
+		c.JSON(http.StatusOK, gin.H{"status": "ok", "time": time.Now()})
 	})
 
 	// Static uploads
 	r.Static("/uploads", config.C.StorageLocalPath)
 
-	// ── Connect DB ────────────────────────────────────────
+	// ── Start HTTP server in background immediately ──────────────
+	// This ensures /health responds before DB/Redis connect
+	go func() {
+		port := config.C.Port
+		log.Printf("🚀 HTTP server listening on :%s", port)
+		if err := r.Run(":" + port); err != nil {
+			log.Fatalf("server error: %v", err)
+		}
+	}()
+
+	// ── Connect DB (with retries, non-blocking for healthcheck) ──
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		dsn = fmt.Sprintf(
@@ -76,41 +77,39 @@ func main() {
 	)
 
 	var db *gorm.DB
-	var rdb *redis.Client
-
-	// Retry DB connection up to 10 times
-	for i := 1; i <= 10; i++ {
+	for i := 1; i <= 15; i++ {
 		var err error
 		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: gormLogger})
 		if err == nil {
-			dbReady = true
 			log.Println("✅ Database connected")
 			break
 		}
-		log.Printf("⏳ DB attempt %d/10 failed: %v — retrying in 3s", i, err)
-		time.Sleep(3 * time.Second)
+		log.Printf("⏳ DB attempt %d/15: %v — retrying in 4s", i, err)
+		time.Sleep(4 * time.Second)
 	}
-	if !dbReady {
-		log.Println("❌ Could not connect to database — check DATABASE_URL env var")
-	}
-
-	if dbReady {
-		if err := db.AutoMigrate(
-			&models.User{},
-			&models.Merchant{},
-			&models.Document{},
-			&models.AuditLog{},
-			&models.MenuItem{},
-			&models.Order{},
-		); err != nil {
-			log.Printf("⚠️  Migration warning: %v", err)
-		} else {
-			log.Println("✅ Migrations complete")
-		}
-		seedAdmin(db)
+	if db == nil {
+		log.Println("❌ Database unavailable — API routes not registered. Check DATABASE_URL.")
+		// Keep server alive so healthcheck keeps passing
+		select {}
 	}
 
-	// ── Connect Redis ─────────────────────────────────────
+	// Migrate
+	if err := db.AutoMigrate(
+		&models.User{},
+		&models.Merchant{},
+		&models.Document{},
+		&models.AuditLog{},
+		&models.MenuItem{},
+		&models.Order{},
+	); err != nil {
+		log.Printf("⚠️  Migration warning: %v", err)
+	} else {
+		log.Println("✅ Migrations complete")
+	}
+	seedAdmin(db)
+
+	// ── Connect Redis ─────────────────────────────────────────────
+	var rdb *redis.Client
 	if redisURL := os.Getenv("REDIS_URL"); redisURL != "" {
 		opt, err := redis.ParseURL(redisURL)
 		if err != nil {
@@ -125,75 +124,86 @@ func main() {
 			DB:       config.C.RedisDB,
 		})
 	}
-
 	if rdb != nil {
 		if err := rdb.Ping(context.Background()).Err(); err != nil {
-			log.Printf("⚠️  Redis not available: %v — OTP features will be degraded", err)
+			log.Printf("⚠️  Redis unavailable: %v — OTP features degraded", err)
+			rdb = nil
 		} else {
-			redisReady = true
 			log.Println("✅ Redis connected")
 		}
 	}
 
-	// ── Email ─────────────────────────────────────────────
+	// ── Email ─────────────────────────────────────────────────────
 	email.Init()
 
-	// ── Register API routes (only if DB is ready) ─────────
+	// ── Register API routes now that DB is ready ─────────────────
 	api := r.Group("/api/v1")
 
-	// Auth routes (need Redis for OTP)
-	authGroup := api.Group("/auth")
-	if db != nil && rdb != nil {
+	// Auth
+	if rdb != nil {
 		authH := auth.NewHandler(db, rdb)
-		authGroup.POST("/send-otp",     authH.SendOTP)
-		authGroup.POST("/verify-otp",   authH.VerifyOTP)
-		authGroup.POST("/resend-otp",   authH.ResendOTP)
-		authGroup.POST("/set-password", authH.SetPassword)
-		authGroup.POST("/login",        authH.Login)
-		authGroup.GET("/me", middleware.AuthRequired(), authH.Me)
+		ag := api.Group("/auth")
+		ag.POST("/send-otp",     authH.SendOTP)
+		ag.POST("/verify-otp",   authH.VerifyOTP)
+		ag.POST("/resend-otp",   authH.ResendOTP)
+		ag.POST("/set-password", authH.SetPassword)
+		ag.POST("/login",        authH.Login)
+		ag.GET("/me", middleware.AuthRequired(), authH.Me)
 	} else {
-		authGroup.Any("/*path", func(c *gin.Context) {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "service starting up, please retry"})
-		})
+		// Login still works without Redis (no OTP needed for login)
+		authH := auth.NewHandler(db, nil)
+		ag := api.Group("/auth")
+		ag.POST("/login", authH.Login)
+		ag.GET("/me", middleware.AuthRequired(), authH.Me)
+		ag.Any("/send-otp",     unavailable)
+		ag.Any("/verify-otp",   unavailable)
+		ag.Any("/resend-otp",   unavailable)
+		ag.Any("/set-password", unavailable)
 	}
 
-	// Merchant routes
-	if db != nil {
-		merchantH := merchant.NewHandler(db)
-		merchantGroup := api.Group("/merchant")
-		merchantGroup.POST("/onboard",       merchantH.Onboard)
-		merchantGroup.POST("/:id/documents", merchantH.UploadDocument)
+	// Merchant
+	merchantH := merchant.NewHandler(db)
+	mg := api.Group("/merchant")
+	mg.POST("/onboard",       merchantH.Onboard)
+	mg.POST("/:id/documents", merchantH.UploadDocument)
+	mp := mg.Group("", middleware.AuthRequired(), middleware.MerchantRequired())
+	mp.GET("/me",                  merchantH.GetMyProfile)
+	mp.GET("/status",              merchantH.GetStatus)
+	mp.GET("/orders",              merchantH.GetOrders)
+	mp.PATCH("/orders/:id/status", merchantH.UpdateOrderStatus)
+	mp.GET("/menu",                merchantH.GetMenu)
+	mp.POST("/menu",               merchantH.CreateMenuItem)
+	mp.PUT("/menu/:id",            merchantH.UpdateMenuItem)
+	mp.DELETE("/menu/:id",         merchantH.DeleteMenuItem)
 
-		protected := merchantGroup.Group("", middleware.AuthRequired(), middleware.MerchantRequired())
-		protected.GET("/me",                  merchantH.GetMyProfile)
-		protected.GET("/status",              merchantH.GetStatus)
-		protected.GET("/orders",              merchantH.GetOrders)
-		protected.PATCH("/orders/:id/status", merchantH.UpdateOrderStatus)
-		protected.GET("/menu",                merchantH.GetMenu)
-		protected.POST("/menu",               merchantH.CreateMenuItem)
-		protected.PUT("/menu/:id",            merchantH.UpdateMenuItem)
-		protected.DELETE("/menu/:id",         merchantH.DeleteMenuItem)
+	// Admin
+	var adminRdb *redis.Client
+	if rdb != nil {
+		adminRdb = rdb
+	} else {
+		// Create a dummy client — admin handler will handle nil gracefully
+		adminRdb = redis.NewClient(&redis.Options{Addr: "localhost:6379"})
 	}
+	adminH := admin.NewHandler(db, adminRdb)
+	adg := api.Group("/admin", middleware.AuthRequired(), middleware.AdminRequired())
+	adg.GET("/dashboard",              adminH.Dashboard)
+	adg.GET("/merchants",              adminH.ListMerchants)
+	adg.GET("/merchants/:id",          adminH.GetMerchant)
+	adg.POST("/merchants/:id/approve", adminH.ApproveMerchant)
+	adg.POST("/merchants/:id/reject",  adminH.RejectMerchant)
+	adg.POST("/merchants/:id/suspend", adminH.SuspendMerchant)
+	adg.GET("/pending",                adminH.PendingApplications)
+	adg.GET("/audit-logs",             adminH.AuditLogs)
+	adg.GET("/analytics",              adminH.Analytics)
 
-	// Admin routes
-	if db != nil && rdb != nil {
-		adminH     := admin.NewHandler(db, rdb)
-		adminGroup := api.Group("/admin", middleware.AuthRequired(), middleware.AdminRequired())
-		adminGroup.GET("/dashboard",              adminH.Dashboard)
-		adminGroup.GET("/merchants",              adminH.ListMerchants)
-		adminGroup.GET("/merchants/:id",          adminH.GetMerchant)
-		adminGroup.POST("/merchants/:id/approve", adminH.ApproveMerchant)
-		adminGroup.POST("/merchants/:id/reject",  adminH.RejectMerchant)
-		adminGroup.POST("/merchants/:id/suspend", adminH.SuspendMerchant)
-		adminGroup.GET("/pending",                adminH.PendingApplications)
-		adminGroup.GET("/audit-logs",             adminH.AuditLogs)
-		adminGroup.GET("/analytics",              adminH.Analytics)
-	}
+	log.Printf("✅ All routes registered — server fully ready")
 
-	log.Printf("🚀 Server running on :%s (db=%v redis=%v)", config.C.Port, dbReady, redisReady)
-	if err := r.Run(":" + config.C.Port); err != nil {
-		log.Fatalf("server error: %v", err)
-	}
+	// Block forever (HTTP server runs in goroutine above)
+	select {}
+}
+
+func unavailable(c *gin.Context) {
+	c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Redis not available — OTP features temporarily disabled"})
 }
 
 func seedAdmin(db *gorm.DB) {

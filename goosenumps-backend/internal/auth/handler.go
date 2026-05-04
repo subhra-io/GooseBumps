@@ -21,7 +21,7 @@ import (
 
 type Handler struct {
 	db  *gorm.DB
-	rdb *redis.Client
+	rdb *redis.Client // may be nil if Redis unavailable
 }
 
 func NewHandler(db *gorm.DB, rdb *redis.Client) *Handler {
