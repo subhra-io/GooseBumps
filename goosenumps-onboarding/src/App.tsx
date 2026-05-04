@@ -28,11 +28,17 @@ export default function App() {
   const [pwdToken, setPwdToken]         = useState('')
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const token  = params.get('token')
-    const path   = window.location.pathname
+    const params  = new URLSearchParams(window.location.search)
+    const token   = params.get('token')
+    const path    = window.location.pathname
 
-    if (path === '/admin' || path === '/admin/') {
+    // Admin mode: either explicit /admin path OR deployed as admin portal (VITE_APP_MODE=admin)
+    const isAdminPortal =
+      path === '/admin' ||
+      path.startsWith('/admin/') ||
+      import.meta.env.VITE_APP_MODE === 'admin'
+
+    if (isAdminPortal) {
       const stored = localStorage.getItem('gns_token')
       const role   = localStorage.getItem('gns_role')
       setScreen(stored && role === 'admin' ? 'admin-dashboard' : 'admin-login')
@@ -66,11 +72,17 @@ export default function App() {
   const handleLogout = () => {
     localStorage.removeItem('gns_token')
     localStorage.removeItem('gns_role')
-    setScreen(window.location.pathname.startsWith('/admin') ? 'admin-login' : 'welcome')
+    const isAdminPortal =
+      window.location.pathname.startsWith('/admin') ||
+      import.meta.env.VITE_APP_MODE === 'admin'
+    setScreen(isAdminPortal ? 'admin-login' : 'welcome')
   }
 
   // ── Splash ──────────────────────────────────────────────
-  if (screen === 'splash') return <SplashScreen onComplete={() => setScreen('welcome')} />
+  if (screen === 'splash') {
+    const afterSplash = import.meta.env.VITE_APP_MODE === 'admin' ? 'admin-login' : 'welcome'
+    return <SplashScreen onComplete={() => setScreen(afterSplash)} />
+  }
 
   // ── Set Password ────────────────────────────────────────
   if (screen === 'set-password') {

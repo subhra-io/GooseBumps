@@ -1,5 +1,5 @@
 {
-  "buildCommand": "cd ../goosenumps-onboarding && npm install && npm run build",
+  "buildCommand": "cd ../goosenumps-onboarding && npm install && VITE_APP_MODE=admin npm run build",
   "outputDirectory": "../goosenumps-onboarding/dist",
   "installCommand": "cd ../goosenumps-onboarding && npm install",
   "framework": "vite",
@@ -12,8 +12,7 @@
       "headers": [
         { "key": "X-Frame-Options", "value": "DENY" },
         { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" }
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
       ]
     }
   ]
