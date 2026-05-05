@@ -53,9 +53,12 @@ func (h *Handler) Onboard(c *gin.Context) {
 	}
 
 	// Create user (unverified, no password yet)
+	// Use a placeholder hash since password_hash is NOT NULL in DB
+	// Real password will be set after OTP verification via /auth/set-password
+	placeholderHash := "$2a$10$placeholder.hash.will.be.replaced.after.otp.verification"
 	user := models.User{
 		Email:        req.Email,
-		PasswordHash: "", // set after approval
+		PasswordHash: placeholderHash, // set after approval
 		Role:         models.RoleMerchant,
 		IsVerified:   false,
 		IsActive:     false,
