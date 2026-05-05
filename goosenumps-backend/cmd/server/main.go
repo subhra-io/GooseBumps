@@ -186,26 +186,15 @@ func main() {
 	api := r.Group("/api/v1")
 
 	// Auth
-	if rdb != nil {
-		authH := auth.NewHandler(db, rdb)
-		ag := api.Group("/auth")
-		ag.POST("/send-otp",     authH.SendOTP)
-		ag.POST("/verify-otp",   authH.VerifyOTP)
-		ag.POST("/resend-otp",   authH.ResendOTP)
-		ag.POST("/set-password", authH.SetPassword)
-		ag.POST("/login",        authH.Login)
-		ag.GET("/me", middleware.AuthRequired(), authH.Me)
-	} else {
-		// Login still works without Redis (no OTP needed for login)
-		authH := auth.NewHandler(db, nil)
-		ag := api.Group("/auth")
-		ag.POST("/login", authH.Login)
-		ag.GET("/me", middleware.AuthRequired(), authH.Me)
-		ag.Any("/send-otp",     unavailable)
-		ag.Any("/verify-otp",   unavailable)
-		ag.Any("/resend-otp",   unavailable)
-		ag.Any("/set-password", unavailable)
-	}
+	// Always create auth handler - it handles Redis unavailability gracefully
+	authH := auth.NewHandler(db, rdb)
+	ag := api.Group("/auth")
+	ag.POST("/send-otp",     authH.SendOTP)
+	ag.POST("/verify-otp",   authH.VerifyOTP)
+	ag.POST("/resend-otp",   authH.ResendOTP)
+	ag.POST("/set-password", authH.SetPassword)
+	ag.POST("/login",        authH.Login)
+	ag.GET("/me", middleware.AuthRequired(), authH.Me)
 
 	// Merchant
 	merchantH := merchant.NewHandler(db)

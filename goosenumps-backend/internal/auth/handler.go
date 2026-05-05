@@ -175,11 +175,23 @@ func (h *Handler) SetPassword(c *gin.Context) {
 		return
 	}
 
-	// Get email from token
-	emailAddr, err := h.rdb.Get(context.Background(), pwdTokenKey(req.Token)).Result()
-	if err == redis.Nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "token expired or invalid"})
-		return
+	var emailAddr string
+	
+	// If Redis is not available, token is the email itself (dev mode)
+	if h.rdb == nil {
+		emailAddr = req.Token // In dev mode, token is just the email
+	} else {
+		// Get email from token
+		var err error
+		emailAddr, err = h.rdb.Get(context.Background(), pwdTokenKey(req.Token)).Result()
+		if err == redis.Nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "token expired or invalid"})
+			return
+		}
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "redis error"})
+			return
+		}
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
@@ -200,8 +212,10 @@ func (h *Handler) SetPassword(c *gin.Context) {
 		return
 	}
 
-	// Delete token
-	h.rdb.Del(context.Background(), pwdTokenKey(req.Token))
+	// Delete token (only if Redis is available)
+	if h.rdb != nil {
+		h.rdb.Del(context.Background(), pwdTokenKey(req.Token))
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "password set successfully"})
 }
@@ -263,6 +277,13 @@ func (h *Handler) ResendOTP(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	
+	// If Redis is not available, just call SendOTP (which handles nil Redis)
+	if h.rdb == nil {
+		h.SendOTP(c)
+		return
+	}
+	
 	// Rate limit: check if OTP already exists with > 9 min TTL
 	ttl, _ := h.rdb.TTL(context.Background(), otpKey(req.Email)).Result()
 	if ttl > 9*time.Minute {
