@@ -77,6 +77,17 @@ func (h *Handler) SendOTP(c *gin.Context) {
 		return
 	}
 
+	// If Redis is not available, return a dev bypass message
+	if h.rdb == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"message":     "OTP sent (dev mode - use 999999)",
+			"expires_in":  600,
+			"masked_email": maskEmail(req.Email),
+			"dev_mode":    true,
+		})
+		return
+	}
+
 	otp, err := generateOTP(config.C.OTPLength)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate OTP"})
@@ -111,6 +122,18 @@ func (h *Handler) VerifyOTP(c *gin.Context) {
 	var req VerifyOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Dev bypass: if Redis is not available, accept magic OTP "999999"
+	if h.rdb == nil {
+		if req.OTP == "999999" {
+			// Mark user as verified
+			h.db.Model(&models.User{}).Where("email = ?", req.Email).Update("is_verified", true)
+			c.JSON(http.StatusOK, gin.H{"message": "OTP verified (dev mode)", "verified": true})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid OTP (use 999999 in dev mode)"})
 		return
 	}
 
