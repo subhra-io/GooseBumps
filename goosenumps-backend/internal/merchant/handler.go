@@ -69,7 +69,7 @@ func (h *Handler) Onboard(c *gin.Context) {
 		user = existing
 	} else {
 		if err := h.db.Create(&user).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user: " + err.Error()})
 			return
 		}
 	}
@@ -101,10 +101,13 @@ func (h *Handler) Onboard(c *gin.Context) {
 	var existingM models.Merchant
 	if err := h.db.Where("user_id = ?", user.ID).First(&existingM).Error; err == nil {
 		merchant.ID = existingM.ID
-		h.db.Save(&merchant)
+		if err := h.db.Save(&merchant).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update merchant: " + err.Error()})
+			return
+		}
 	} else {
 		if err := h.db.Create(&merchant).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create merchant"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create merchant: " + err.Error()})
 			return
 		}
 	}

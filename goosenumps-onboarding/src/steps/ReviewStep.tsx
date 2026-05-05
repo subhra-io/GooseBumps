@@ -65,8 +65,13 @@ export default function ReviewStep({ onSubmit, onBack, onEditStep }: ReviewStepP
         if (u.file) await api.uploadDocument(res.merchant_id, u.type, u.file)
       }
 
-      // 3. Trigger OTP to registered email
-      await api.sendOTP(b.email, b.businessName)
+      // 3. Trigger OTP to registered email (optional - may fail if Redis not available)
+      try {
+        await api.sendOTP(b.email, b.businessName)
+      } catch (otpErr) {
+        console.warn('OTP send failed (Redis may not be available):', otpErr)
+        // Continue anyway - admin can manually approve
+      }
 
       onSubmit()
     } catch (err: any) {
